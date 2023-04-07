@@ -1,3 +1,4 @@
+import os
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -5,7 +6,8 @@ from datetime import datetime
 from skimage.feature import peak_local_max
 
 ### seasonal or monthly mean?
-seasonal_averaging = True
+seasonal_averaging = False
+testing = False
 
 ### era5, era-interim
 indata = 'era5'
@@ -122,14 +124,14 @@ def slice_region(da, region, boarder=8):
 
 def write_csv_with_header(df, header, version_id, indata, time_averaging):
 
-    if (len(all_lows_dfs.time.unique()) < 200):
+    if testing:
         if '-TESTING' not in version_id:
             version_id = version_id+'-TESTING'
 
     if header == 'asli':     
-        fname = indata+'/asli_'+time_averaging+'_v'+version_id+'.csv'
+        fname = indata+'/asli_'+time_averaging+'_v'+version_id+'-197901-202212.csv'
     if header == 'all_lows': 
-        fname = indata+'/all_lows_'+time_averaging+'_v'+version_id+'.csv'
+        fname = indata+'/all_lows_'+time_averaging+'_v'+version_id+'-197901-202212.csv'
 
     with open('csv_header_asli_v3.txt') as header_file:  
         lines = header_file.readlines()
@@ -149,17 +151,17 @@ def write_csv_with_header(df, header, version_id, indata, time_averaging):
 # Analysis
 print(indata)
 
-if indata == 'era5':
-    root = '/Users/shosking/Large_Data/ERA5/'
-    da = xr.open_mfdataset(root+'monthly/era5_mean_sea_level_pressure_monthly_*.nc').msl
-    if da.expver.size > 1:
-        da = da.isel(expver=0)
-    mask = xr.open_dataset(root+'/era5_invariant_lsm.nc').lsm.squeeze()
+root = '/glade/work/zespinosa/data/index/ASL/amundsen-sea-low-index/data'
+da   = xr.open_dataset(os.path.join(root, 'era5_mean_sea_level_pressure_monthly_197901-202212.nc')).msl
 
-if indata == 'era-interim':
-    root = '../INDATA/ERAI/'
-    da   = xr.open_dataset(root+'/erai_sfc_monthly.nc').msl
-    mask = xr.open_dataset(root+'/erai_invariant.nc').lsm.squeeze()
+root_mask = '/glade/work/zespinosa/GRIDS'
+mask = xr.open_dataset(os.path.join(root_mask, 'era5_land_sea_mask_25x25.nc')).lsm.squeeze()
+# Rename dim
+mask = mask.rename({'lat':'latitude', 'lon':'longitude'})
+# Drop coords
+mask = mask.reset_coords(names=["realization", "time", "experimentVersionNumber"], drop=True)
+# Reset Longitudes
+mask["longitude"] = np.concatenate([da["longitude"][720:].values, da["longitude"][:720].values])
 
 if seasonal_averaging == True:
     da = season_mean(da, calendar="standard")
